@@ -1,40 +1,62 @@
 import Link from "next/link";
-import {
-  Eye,
-  FileText,
-  HeartPulse,
-  ShieldAlert,
-  Search,
-} from "lucide-react";
+import { Eye, FileText, HeartPulse, Search } from "lucide-react";
+
 import { createClient } from "@/lib/supabase/server";
 
 function riskColor(risk?: string | null) {
   const value = (risk ?? "").toLowerCase();
 
-  if (value.includes("high"))
+  if (value.includes("high") || value.includes("critical")) {
     return "bg-red-100 text-red-700 border-red-200";
+  }
 
-  if (value.includes("medium") || value.includes("moderate"))
+  if (value.includes("medium") || value.includes("moderate")) {
+    return "bg-orange-100 text-orange-700 border-orange-200";
+  }
+
+  if (value.includes("low")) {
     return "bg-yellow-100 text-yellow-700 border-yellow-200";
+  }
 
-  return "bg-green-100 text-green-700 border-green-200";
+  if (value.includes("normal")) {
+    return "bg-green-100 text-green-700 border-green-200";
+  }
+
+  return "bg-gray-100 text-gray-700 border-gray-200";
+}
+
+function formatConfidence(confidence: unknown) {
+  if (typeof confidence !== "number") return "N/A";
+  return `${Math.round(confidence * 100)}%`;
+}
+
+function formatDate(value: unknown) {
+  if (typeof value !== "string") return "N/A";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "N/A";
+
+  return date.toLocaleDateString();
 }
 
 export default async function ReportsPage() {
   const supabase = await createClient();
 
-  const { data: reports } = await supabase
+  const { data: reports, error } = await supabase
     .from("agent_outputs")
     .select("*")
     .order("created_at", { ascending: false });
 
+  if (error) {
+    throw new Error(`Unable to load ECG reports: ${error.message}`);
+  }
+
   return (
     <div className="space-y-8">
-      {/* Header */}
-
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">ECG Reports</h1>
+          <h1 className="text-3xl font-bold text-gray-900">ECG Reports</h1>
           <p className="text-muted-foreground">
             AI generated ECG analysis reports.
           </p>
@@ -46,8 +68,6 @@ export default async function ReportsPage() {
         </div>
       </div>
 
-      {/* Search */}
-
       <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
         <Search className="h-4 w-4 text-muted-foreground" />
         <input
@@ -55,8 +75,6 @@ export default async function ReportsPage() {
           className="w-full bg-transparent outline-none"
         />
       </div>
-
-      {/* Cards */}
 
       <div className="grid gap-6">
         {reports?.map((report) => (
@@ -72,26 +90,26 @@ export default async function ReportsPage() {
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-bold">
+                    <h2 className="text-xl font-bold text-gray-900">
                       {report.prediction ?? "Unknown"}
                     </h2>
 
-                    <p className="text-muted-foreground text-sm">
-                      {report.patient_external_id}
+                    <p className="text-sm text-muted-foreground">
+                      {report.patient_external_id ?? "No patient ID"}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
                   <span
-                    className={`rounded-full border px-3 py-1 text-sm ${riskColor(
+                    className={`rounded-full border px-3 py-1 text-sm font-medium ${riskColor(
                       report.risk_flag
                     )}`}
                   >
-                    {report.risk_flag ?? "Low Risk"}
+                    {report.risk_flag ?? "Unknown Risk"}
                   </span>
 
-                  <span className="rounded-full border bg-blue-50 px-3 py-1 text-sm text-blue-700">
+                  <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
                     {report.urgency_level ?? "Routine"}
                   </span>
                 </div>
@@ -100,25 +118,18 @@ export default async function ReportsPage() {
               <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
                 <div>
                   <p className="text-xs text-muted-foreground">Confidence</p>
-
                   <p className="text-lg font-bold text-green-600">
-                    {report.confidence
-                      ? `${Math.round(report.confidence * 100)}%`
-                      : "N/A"}
+                    {formatConfidence(report.confidence)}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-xs text-muted-foreground">Lead</p>
-
-                  <p className="font-semibold">
-                    {report.ecg_lead ?? "-"}
-                  </p>
+                  <p className="font-semibold">{report.ecg_lead ?? "-"}</p>
                 </div>
 
                 <div>
                   <p className="text-xs text-muted-foreground">Region</p>
-
                   <p className="font-semibold">
                     {report.dominant_ecg_region ?? "-"}
                   </p>
@@ -126,9 +137,8 @@ export default async function ReportsPage() {
 
                 <div>
                   <p className="text-xs text-muted-foreground">Generated</p>
-
                   <p className="font-semibold">
-                    {new Date(report.created_at).toLocaleDateString()}
+                    {formatDate(report.created_at)}
                   </p>
                 </div>
               </div>
@@ -148,9 +158,7 @@ export default async function ReportsPage() {
           <div className="rounded-2xl border p-12 text-center">
             <FileText className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
 
-            <h3 className="text-xl font-semibold">
-              No ECG Reports Found
-            </h3>
+            <h3 className="text-xl font-semibold">No ECG Reports Found</h3>
 
             <p className="mt-2 text-muted-foreground">
               AI reports will appear here automatically after analysis.
